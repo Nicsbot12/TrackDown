@@ -9,7 +9,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 const PAGE_ACCESS_TOKEN = "EAAUG0iogqEYBOyZCbO8SQ1d9f8KDfku3pan9Ok5lA1u56ZBycol5n4me74zsRNJO8wh8fiTgw1ejZCDxZBknhHwiz7MaxSZCcV8nNbYYCi4Ijutlg6IcLXnAvLdwpbnIA1AO6giyGtQZBweho42RNB13IzLUOHyualEjU31CkpXjJiVurFsWEZCL7ntNveeBHjkUgZDZD";
 const VERIFY_TOKEN = "hackbot";
-const hostURL = "YOUR_URL_HERE"; // Replace with your URL
+const hostURL = "https://trackdown-efzv.onrender.com/webhook"; // Replace with your URL
 
 // Webhook verification
 app.get("/webhook", (req, res) => {
