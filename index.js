@@ -9,7 +9,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || "EAAUG0iogqEYBO3H4mS1GDZBZCDSiL2LYZB8iwYwxT86BfXiQtpCUvkXsvm8nmDYNdrH1fxBQ3wyT7660p4kIM3ZBDxegl3GYiAZB1hknXfBxHkgLjIeyZAitiAqQOkvcGZAfHusF6pqgeq9Xm6ZBXCZCXKzX6YMo56b9YH7uxknYHhMZAQvQaLw8OnsvzKexvLIKuS9QZDZD";
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "hackbot";
-const hostURL = "https://trackdown-efzv.onrender.com/webhook"; // Replace with your URL
+const hostURL = "https://your-host-url.com"; // Replace with your actual host URL
 
 // Set EJS as the view engine
 app.set("view engine", "ejs");
@@ -69,28 +69,41 @@ function handleMessage(senderId, receivedMessage) {
 
         // Validate URL (simple check, can be improved)
         if (url.startsWith("http://") || url.startsWith("https://")) {
-            response = { text: `URL received: ${url}` };
+            response = { text: `URL received: ${url}\nHere are your tracking links:` };
+            callSendAPI(senderId, response);
+
+            // Send cloudflare link
+            const cloudflareLink = `${hostURL}/cloudflare`;
+            callSendAPI(senderId, { text: `🔗 Cloudflare Tracking Link: ${cloudflareLink}` });
+
+            // Send webview link
+            const webviewLink = `${hostURL}/webview`;
+            callSendAPI(senderId, { text: `🔗 Webview Tracking Link: ${webviewLink}` });
+
             delete userStates[senderId]; // Clear the state
         } else {
             response = { text: `Please enter a valid URL starting with http:// or https://` };
+            callSendAPI(senderId, response);
         }
     } else {
         // Handle commands
         if (receivedMessage.text.toLowerCase() === "/start") {
             response = { text: `Welcome! Use this bot to create tracking links. Type /create to start.` };
+            callSendAPI(senderId, response);
         } else if (receivedMessage.text.toLowerCase() === "/create") {
             response = { text: `🌐 Please enter your URL:` };
             userStates[senderId] = "awaiting_url"; // Set state to expect URL input
+            callSendAPI(senderId, response);
         } else if (receivedMessage.text.toLowerCase() === "/help") {
             response = {
                 text: `Instructions:\n1. Use /create to start.\n2. Enter a URL to generate tracking links.\n\nNote: This bot gathers info like location and device data.`
             };
+            callSendAPI(senderId, response);
         } else {
             response = { text: `Unknown command.` };
+            callSendAPI(senderId, response);
         }
     }
-
-    callSendAPI(senderId, response);
 }
 
 // Function to handle postback responses
@@ -141,4 +154,3 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-        
