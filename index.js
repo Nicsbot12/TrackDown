@@ -7,8 +7,8 @@ const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const PAGE_ACCESS_TOKEN = "PAGE_ACCESS_TOKEN";
+const VERIFY_TOKEN = "VERIFY_TOKEN";
 const hostURL = "YOUR_URL_HERE"; // Replace with your URL
 
 // Webhook verification
